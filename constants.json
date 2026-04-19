@@ -1,0 +1,26 @@
+{
+  "TAX_CONSTANTS": {
+    "FY_Yr": "2025/26",
+    "Tax_Band_1": 18200.0,
+    "Tax_Band_2": 45000.0,
+    "Tax_Band_3": 135000.0,
+    "Tax_Band_4": 190000.0,
+    "Tax_Rate_2": 0.16,
+    "Tax_Rate_3": 0.30,
+    "Tax_Rate_4": 0.37,
+    "Tax_Rate_Top": 0.45,
+    "LITO_Full": 700.0,
+    "LITO_Band_1": 37500.0,
+    "LITO_Band_2": 45000.0,
+    "LITO_Band_Top": 66667.0,
+    "Med_Levy_Band_1": 27222.0,
+    "Med_Levy_Band_Top": 34027.0,
+    "Med_Levy_Low_Rate": 0.10,
+    "Med_Levy_Rate": 0.02,
+    "FITO_De_Minimis": 1000.0
+  },
+  "APP_CONSTANTS": {
+    "Title": "Australian FITO Tax Calculator",
+    "Version": "2026.04.19"
+  }
+}

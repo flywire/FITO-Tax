@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+        th { background: #f2f2f2; text-align: left; }
+        input { width: 100px; padding: 4px; text-align: right; }
+        button { padding: 10px 20px; margin: 10px 0; }
+        #constants { display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- Will be filled from JS -->
+    <h1 id="appTitle">
+      <a href="https://github.com/flywire/FITO-Tax" target="_blank" rel="noopener noreferrer">
+        <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+             alt="GitHub Repository" title="Open GitHub Repository"
+             style="width:32px; height:32px; vertical-align:middle; margin-right: 8px;"></a>
+      <span id="appTitleText">Loading...</span>
+    </h1>
+
+    <table>
+        <tr><th>Description</th><th>Value</th></tr>
+        <tr><td>Taxable Income</td><td><input type="number" id="taxable" value="30000"></td></tr>
+        <tr><td>Foreign Income</td><td><input type="number" id="foreignInc" value="10000"></td></tr>
+        <tr><td>Foreign Tax</td><td><input type="number" id="foreignTax" value="1400"></td></tr>
+    </table>
+
+    <button onclick="calculateTax()">Calculate Tax</button>
+    <button onclick="toggleConstants()">Check Constants</button>
+
+    <h2>Results</h2>
+    <table id="results">
+        <tr><th>Description</th><th>Value</th></tr>
+    </table>
+
+    <div id="constants">
+        <h2>Constants</h2>
+        <table id="constTable">
+            <tr><th>Description</th><th>Value</th></tr>
+			<!--
+			<th>Name</th></tr>
+			-->
+        </table>
+    </div>
+
+    <script>
+        let TAX_CONSTANTS = {};
+        let TAX_BASES = { band3: 0 };
+        const APP_CONSTANTS = {
+            Title: "Australian FITO Tax Calculator",
+            Version: "2026.04.19"
+        };
+
+        // money with AU commas, 2 decimals
+        function f(v) {
+            if (v === undefined || v === null || isNaN(v)) return "—";
+            const num = Math.abs(v) < 0.005 ? 0 : v;
+            const parts = num.toFixed(2).toString().split(".");
+            const int = Number(parts[0]);
+            const frac = parts[1];
+            const intStr = int.toLocaleString("en-AU");
+            return "$" + intStr + "." + frac;
+        }
+
+        // percent with 0 decimals
+        function p(v) {
+            if (v === undefined || v === null || isNaN(v)) return "—";
+            return (v * 100).toFixed(0) + "%";
+        }
+
+        function grossTax(income) {
+            if (income <= TAX_CONSTANTS.Tax_Band_1) return 0;
+            if (income <= TAX_CONSTANTS.Tax_Band_2) return (income - TAX_CONSTANTS.Tax_Band_1) * TAX_CONSTANTS.Tax_Rate_2;
+            if (income <= TAX_CONSTANTS.Tax_Band_3) return TAX_BASES.band3 + (income - TAX_CONSTANTS.Tax_Band_2) * TAX_CONSTANTS.Tax_Rate_3;
+            if (income <= TAX_CONSTANTS.Tax_Band_4) return TAX_BASES.band4 + (income - TAX_CONSTANTS.Tax_Band_3) * TAX_CONSTANTS.Tax_Rate_4;
+            return TAX_BASES.top + (income - TAX_CONSTANTS.Tax_Band_4) * TAX_CONSTANTS.Tax_Rate_Top;
+        }
+
+        function lito(income) {
+            if (income <= TAX_CONSTANTS.LITO_Band_1) return TAX_CONSTANTS.LITO_Full;
+            if (income <= TAX_CONSTANTS.LITO_Band_2) return TAX_CONSTANTS.LITO_Full - (income - TAX_CONSTANTS.LITO_Band_1) * 0.05;
+            if (income <= TAX_CONSTANTS.LITO_Band_Top) return 325 - (income - TAX_CONSTANTS.LITO_Band_2) * 0.015;
+            return 0;
+        }
+
+        function medicareLevy(income) {
+            if (income <= TAX_CONSTANTS.Med_Levy_Band_1) return 0;
+            if (income <= TAX_CONSTANTS.Med_Levy_Band_Top) return (income - TAX_CONSTANTS.Med_Levy_Band_1) * TAX_CONSTANTS.Med_Levy_Low_Rate;
+            return income * TAX_CONSTANTS.Med_Levy_Rate;
+        }
+
+        function fitoLimit(foreignTax, grossTaxIncMedicare, grossTaxExclForeignIncMedicare) {
+            if (foreignTax <= TAX_CONSTANTS.FITO_De_Minimis) {
+                return foreignTax;
+            }
+            return grossTaxIncMedicare - grossTaxExclForeignIncMedicare;
+        }
+
+        function calculateTax() {
+            const taxable = parseFloat(document.getElementById('taxable').value);
+            const foreignInc = parseFloat(document.getElementById('foreignInc').value);
+            const foreignTaxPaid = parseFloat(document.getElementById('foreignTax').value);
+
+            const taxableExclForeign = taxable - foreignInc;
+
+            const grossTaxTotal = grossTax(taxable);
+            const litoOffset = lito(taxable);
+            const taxAfterLito = Math.max(0, grossTaxTotal - litoOffset);
+            const medicareTotal = medicareLevy(taxable);
+
+            const grossTaxExcl = grossTax(taxableExclForeign);
+            const medicareExcl = medicareLevy(taxableExclForeign);
+            const grossTaxExclTotal = grossTaxExcl + medicareExcl;
+
+            const grossTaxIncMedicare = grossTaxTotal + medicareTotal;
+            const grossTaxExclForeignIncMedicare = grossTaxExclTotal;
+
+            const fitoLimitVal = fitoLimit(
+                foreignTaxPaid,
+                grossTaxIncMedicare,
+                grossTaxExclForeignIncMedicare
+            );
+            const fitoUsed = Math.min(foreignTaxPaid, fitoLimitVal);
+            const fitoToTax = Math.min(fitoUsed, taxAfterLito);
+            const taxFinal = taxAfterLito - fitoToTax;
+            const fitoRemaining = fitoUsed - fitoToTax;
+            const medicareFinal = Math.max(0, medicareTotal - fitoRemaining);
+            const totalPayable = Math.max(0, taxFinal + medicareFinal);
+
+            const results = document.getElementById('results');
+            results.innerHTML = "";
+
+            const tbody = document.createElement("tbody");
+            results.appendChild(tbody);
+
+            function addRow(desc, val) {
+                const tr = document.createElement("tr");
+                const td1 = document.createElement("td");
+                const td2 = document.createElement("td");
+                td1.innerHTML = desc;
+                td2.innerHTML = val;
+                tr.appendChild(td1);
+                tr.appendChild(td2);
+                tbody.appendChild(tr);
+            }
+
+            addRow("<b>Description</b>", "<b>Value</b>");
+            addRow("Gross tax on taxable income", f(grossTaxTotal));
+            addRow("Low‑Income Tax Offset (LITO)", f(litoOffset));
+            addRow("Tax after Low‑Income Tax Offset", f(taxAfterLito));
+            addRow("Medicare Levy", f(medicareTotal));
+            addRow("Gross tax including Medicare, before LITO", f(grossTaxIncMedicare));
+            addRow("Gross tax excl. foreign income", f(grossTaxExclForeignIncMedicare));
+            addRow("Foreign income tax offset limit", f(fitoLimitVal));
+            addRow("Foreign income tax offset used", f(fitoUsed));
+            addRow("Foreign income tax offset to tax", f(fitoToTax));
+            addRow("Tax after foreign income tax offset", f(taxFinal));
+            addRow("Remaining foreign income tax offset", f(fitoRemaining));
+            addRow("Medicare after foreign income tax offset", f(medicareFinal));
+            addRow("Total Payable", "<b>" + f(totalPayable) + "</b>");
+        }
+
+        function toggleConstants() {
+            const div = document.getElementById('constants');
+            if (div.style.display === 'none' || div.style.display === '') {
+                div.style.display = 'block';
+                displayConstants();
+            } else {
+                div.style.display = 'none';
+            }
+        }
+
+        function displayConstants() {
+            const table = document.getElementById('constTable');
+            table.innerHTML = '<tr><th>Description</th><th>Value</th></tr>';
+
+            const descFor = {
+                FY_Yr:               "Financial Year",
+                Tax_Band_1:          "Upper limit of first tax bracket",
+                Tax_Band_2:          "Upper limit of second tax bracket",
+                Tax_Band_3:          "Upper limit of third tax bracket",
+                Tax_Band_4:          "Upper limit of fourth tax bracket",
+                Tax_Rate_2:          "Tax rate for second tax bracket",
+                Tax_Rate_3:          "Tax rate for third tax bracket",
+                Tax_Rate_4:          "Tax rate for fourth tax bracket",
+                Tax_Rate_Top:        "Tax rate for top tax bracket",
+                LITO_Full:           "Maximum Low‑Income Tax Offset (LITO)",
+                LITO_Band_1:         "Start of Low‑Income Tax Offset phase‑down",
+                LITO_Band_2:         "Deeper phase‑down of Low‑Income Tax Offset",
+                LITO_Band_Top:       "Maximum income receiving Low‑Income Tax Offset",
+                Med_Levy_Band_1:     "Medicare Levy low‑income limit",
+                Med_Levy_Band_Top:   "Medicare Levy phase‑in upper limit",
+                Med_Levy_Low_Rate:   "Medicare Levy low‑income rate",
+                Med_Levy_Rate:       "Medicare Levy full rate",
+                FITO_De_Minimis:     "Foreign Income Tax Offset full benefit limit"
+            };
+
+            for (let key in TAX_CONSTANTS) {
+                let value = TAX_CONSTANTS[key];
+                let formatted = value;
+                let desc = descFor[key] || "";
+
+                if (key === "Tax_Rate_2" || key === "Tax_Rate_3" ||
+                    key === "Tax_Rate_4" || key === "Tax_Rate_Top" ||
+                    key === "Med_Levy_Low_Rate" || key === "Med_Levy_Rate") {
+                    formatted = p(value);
+                } else if (value >= 1000 && value % 1 === 0) {
+                    formatted = value.toLocaleString("en-AU");
+                }
+
+                const tr = table.insertRow();
+                const td1 = tr.insertCell();
+                const td2 = tr.insertCell();
+                td1.textContent = desc;
+                td2.textContent = formatted;
+            }
+        }
+
+        // Load constants from JSON at startup
+        fetch('constants.json')
+            .then(response => response.json())
+            .then(data => {
+                TAX_CONSTANTS = data.TAX_CONSTANTS;
+                Object.assign(APP_CONSTANTS, data.APP_CONSTANTS ?? {});
+        
+                TAX_BASES.band3 = (TAX_CONSTANTS.Tax_Band_2 - TAX_CONSTANTS.Tax_Band_1) * TAX_CONSTANTS.Tax_Rate_2;
+                TAX_BASES.band4 = TAX_BASES.band3 + (TAX_CONSTANTS.Tax_Band_3 - TAX_CONSTANTS.Tax_Band_2) * TAX_CONSTANTS.Tax_Rate_3;
+                TAX_BASES.top   = TAX_BASES.band4 + (TAX_CONSTANTS.Tax_Band_4 - TAX_CONSTANTS.Tax_Band_3) * TAX_CONSTANTS.Tax_Rate_4;
+        
+                document.title = APP_CONSTANTS.Title;
+        
+                document.getElementById("appTitleText").textContent = APP_CONSTANTS.Title;
+                document.getElementById("appVersion").textContent = APP_CONSTANTS.Version;
+                calculateTax();
+            })
+            .catch(err => {
+                console.error("Failed to load constants.json", err);
+                const appTitle = document.getElementById("appTitle");
+                appTitle.appendChild(document.createTextNode("Error: constants.json not loaded"));
+            });
+    </script>
+
+    <p style="margin-top: 30px; font-size: 0.85em; color: #555;">
+        Version <span id="appVersion"></span><br>
+        &copy; 2026 flywire. Licensed under <a href="https://www.gnu.org/licenses/gpl-3.0.html">GPL‑3+</a>.
+    </p>
+</body>
+</html>
