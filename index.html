@@ -12,6 +12,7 @@
         input { width: 100px; padding: 4px; text-align: right; }
         button { padding: 10px 20px; margin: 10px 0; }
         #constants { display: none; }
+        #linkStatus { color: green; font-weight: bold; margin-left: 10px; }
     </style>
 </head>
 <body>
@@ -25,14 +26,16 @@
       <span id="appTitleText">Loading...</span>
     </h1>
 
-    <table>
-        <tr><th>Description</th><th>Value</th></tr>
-        <tr><td>Taxable Income</td><td><input type="number" id="taxable" value="30000"></td></tr>
-        <tr><td>Foreign Income</td><td><input type="number" id="foreignInc" value="10000"></td></tr>
-        <tr><td>Foreign Tax</td><td><input type="number" id="foreignTax" value="1400"></td></tr>
-    </table>
+	<table>
+		<tr><th>Description</th><th>Value</th></tr>
+		<tr><td>Taxable Income</td><td><input type="number" id="taxable" value="0"></td></tr>
+		<tr><td>Foreign Income</td><td><input type="number" id="foreignInc" value="0"></td></tr>
+		<tr><td>Foreign Tax</td><td><input type="number" id="foreignTax" value="0"></td></tr>
+	</table>
 
     <button onclick="calculateTax()">Calculate Tax</button>
+	<button onclick="copyLink()">🔗 Link</button>
+	<span id="linkStatus"></span>
     <button onclick="toggleConstants()">Check Constants</button>
 
     <h2>Results</h2>
@@ -44,9 +47,9 @@
         <h2>Constants</h2>
         <table id="constTable">
             <tr><th>Description</th><th>Value</th></tr>
-			<!--
-			<th>Name</th></tr>
-			-->
+            <!--
+            <th>Name</th></tr>
+            -->
         </table>
     </div>
 
@@ -55,7 +58,7 @@
         let TAX_BASES = { band3: 0 };
         const APP_CONSTANTS = {
             Title: "Australian FITO Tax Calculator",
-            Version: "2026.04.19"
+            Version: "2026.04.24"
         };
 
         // money with AU commas, 2 decimals
@@ -167,6 +170,28 @@
             addRow("Total Payable", "<b>" + f(totalPayable) + "</b>");
         }
 
+        function copyLink() {
+            const elTax = document.getElementById('taxable');
+            const elForeignInc = document.getElementById('foreignInc');
+            const elForeignTax = document.getElementById('foreignTax');
+            
+            const taxable = encodeURIComponent(elTax.value || "30000");
+            const foreignInc = encodeURIComponent(elForeignInc.value || "10000");
+            const foreignTax = encodeURIComponent(elForeignTax.value || "1400");
+            
+            const baseUrl = window.location.href.split('?')[0]; // Remove existing params
+            const shareUrl = `${baseUrl}?taxable=${taxable}&foreignInc=${foreignInc}&foreignTax=${foreignTax}`;
+            
+            navigator.clipboard.writeText(shareUrl).then(() => {
+                const status = document.getElementById('linkStatus');
+                status.textContent = 'Copied!';
+                setTimeout(() => status.textContent = '', 2000);
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                prompt('Copy this URL:', shareUrl); // Fallback
+            });
+        }
+
         function toggleConstants() {
             const div = document.getElementById('constants');
             if (div.style.display === 'none' || div.style.display === '') {
@@ -238,6 +263,16 @@
         
                 document.getElementById("appTitleText").textContent = APP_CONSTANTS.Title;
                 document.getElementById("appVersion").textContent = APP_CONSTANTS.Version;
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const elTax = document.getElementById('taxable');
+                const elForeignInc = document.getElementById('foreignInc');
+                const elForeignTax = document.getElementById('foreignTax');
+
+                if (urlParams.has('taxable')) elTax.value = urlParams.get('taxable');
+                if (urlParams.has('foreignInc')) elForeignInc.value = urlParams.get('foreignInc');
+                if (urlParams.has('foreignTax')) elForeignTax.value = urlParams.get('foreignTax');
+
                 calculateTax();
             })
             .catch(err => {
